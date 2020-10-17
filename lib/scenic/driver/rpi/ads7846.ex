@@ -17,12 +17,13 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
         nil ->
           nil
 
-        {{ax, bx, dx}, {ay, by, dy}} = calib when is_number(ax) and
-                                                  is_number(bx) and
-                                                  is_number(dx) and
-                                                  is_number(ay) and
-                                                  is_number(by) and
-                                                  is_number(dy) ->
+        {{ax, bx, dx}, {ay, by, dy}} = calib
+        when is_number(ax) and
+               is_number(bx) and
+               is_number(dx) and
+               is_number(ay) and
+               is_number(by) and
+               is_number(dy) ->
           calib
 
         _ ->
@@ -141,21 +142,32 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
 
   defp send_mouse(state)
 
-  defp send_mouse(%{viewport: viewport, mouse_x: x, mouse_y: y, mouse_event: :mouse_down} = state) when is_pos(x, y) do
+  defp send_mouse(%{viewport: viewport, mouse_x: x, mouse_y: y, mouse_event: :mouse_down} = state)
+       when is_pos(x, y) do
     pos = project_pos({x, y}, state)
-    Logger.debug("ViewPort.input(#{inspect(viewport)}, {:cursor_button, {:left, :press, 0, #{inspect(pos)}}})")
+
+    Logger.debug(
+      "ViewPort.input(#{inspect(viewport)}, {:cursor_button, {:left, :press, 0, #{inspect(pos)}}})"
+    )
+
     ViewPort.input(viewport, {:cursor_button, {:left, :press, 0, pos}})
     %{state | mouse_event: nil}
   end
 
-  defp send_mouse(%{viewport: viewport, mouse_x: x, mouse_y: y, mouse_event: :mouse_up} = state) when is_pos(x, y) do
+  defp send_mouse(%{viewport: viewport, mouse_x: x, mouse_y: y, mouse_event: :mouse_up} = state)
+       when is_pos(x, y) do
     pos = project_pos({x, y}, state)
-    Logger.debug("ViewPort.input(#{inspect(viewport)}, {:cursor_button, {:left, :release, 0, #{inspect(pos)}}})")
+
+    Logger.debug(
+      "ViewPort.input(#{inspect(viewport)}, {:cursor_button, {:left, :release, 0, #{inspect(pos)}}})"
+    )
+
     ViewPort.input(viewport, {:cursor_button, {:left, :release, 0, pos}})
     %{state | mouse_x: nil, mouse_y: nil, mouse_event: nil}
   end
 
-  defp send_mouse(%{viewport: viewport, mouse_x: x, mouse_y: y, mouse_event: :mouse_move} = state) when is_pos(x, y) do
+  defp send_mouse(%{viewport: viewport, mouse_x: x, mouse_y: y, mouse_event: :mouse_move} = state)
+       when is_pos(x, y) do
     pos = project_pos({x, y}, state)
     Logger.debug("ViewPort.input(#{inspect(viewport)}, {:cursor_pos, #{inspect(pos)}})")
     ViewPort.input(viewport, {:cursor_pos, pos})
