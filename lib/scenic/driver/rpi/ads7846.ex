@@ -4,11 +4,12 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
 
   require Logger
 
-  defguard is_pos(x, y) when is_number(x) and is_number(y)
+  defguardp is_pos(x, y) when is_number(x) and is_number(y)
 
   @init_retry_ms 400
   @device "ADS7846 Touchscreen"
 
+  @impl true
   def init(viewport, {_, _} = screen_size, config) do
     Process.send(self(), {:init_driver, @device}, [])
 
@@ -55,8 +56,13 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
     {:ok, state}
   end
 
+  @impl true
   def handle_call(_msg, _from, state), do: {:reply, :e_no_impl, state}
 
+  @impl true
+  def handle_cast(_msg, state), do: {:noreply, state}
+
+  @impl true
   def handle_info({:init_driver, requested_device}, state) do
     InputEvent.enumerate()
     |> Enum.find_value(fn
