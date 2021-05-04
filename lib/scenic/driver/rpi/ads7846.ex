@@ -63,6 +63,8 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
       {event, %InputEvent.Info{}} ->
         {:ok, pid} = InputEvent.start_link(event)
 
+        Logger.info("ADS7846 Driver initialized")
+
         {:noreply, %{state | event_pid: pid, event_path: event}}
 
       nil ->
@@ -75,6 +77,8 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
   end
 
   def handle_info({:input_event, event_path, events}, %{event_path: event_path} = state) do
+    Logger.debug("input events: #{inspect(events, limit: :infinity)}")
+
     state =
       Enum.reduce(events, state, fn event, st ->
         event
@@ -82,6 +86,8 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
         |> Mouse.simulate_mouse(event)
       end)
       |> Mouse.send_mouse()
+
+    Logger.debug("mouse event: #{inspect(state, limit: :infinity)}")
 
     {:noreply, state}
   end
@@ -97,6 +103,7 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
   defp get_calibration(config) do
     case config[:calibration] do
       {{ax, bx, dx}, {ay, by, dy}} = calibration when is_calibration(ax, bx, dx, ay, by, dy) ->
+        Logger.debug("calibration: #{ax}, #{bx}, #{dx}, #{ay}, #{by}, #{dy}")
         calibration
 
       nil ->
