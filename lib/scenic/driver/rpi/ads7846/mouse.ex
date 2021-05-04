@@ -7,17 +7,17 @@ defmodule Scenic.Driver.Rpi.ADS7846.Mouse do
 
   defguardp is_pos(x, y) when is_number(x) and is_number(y)
 
-  def ev_abs(event, state) do
-    case {event, state} do
-      {{:ev_key, :btn_touch, 1}, %{touch: touch}} ->
+  def ev_abs(state, event) do
+    case {state, event} do
+      {%{touch: touch}, {:ev_key, :btn_touch, 1}} ->
         mouse_event = if touch, do: nil, else: :mouse_down
         %{state | touch: true, mouse_event: mouse_event}
 
-      {{:ev_key, :btn_touch, 0}, %{touch: touch}} ->
+      {%{touch: touch}, {:ev_key, :btn_touch, 0}} ->
         mouse_event = if touch, do: :mouse_up, else: nil
         %{state | touch: false, mouse_event: mouse_event}
 
-      {_, state} ->
+      {state, _event} ->
         state
     end
   end

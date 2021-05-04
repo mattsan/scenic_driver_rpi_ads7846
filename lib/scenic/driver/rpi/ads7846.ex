@@ -81,8 +81,8 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
 
     state =
       Enum.reduce(events, state, fn event, st ->
-        event
-        |> Mouse.ev_abs(st)
+        st
+        |> Mouse.ev_abs(event)
         |> Mouse.simulate_mouse(event)
       end)
       |> Mouse.send_mouse()
