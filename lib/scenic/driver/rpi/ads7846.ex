@@ -23,6 +23,7 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
     mouse_event: nil,
     config: nil,
     calibration: nil,
+    rotate: 0,
     size: nil
   }
 
@@ -43,6 +44,7 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
       | viewport: viewport,
         config: config,
         calibration: get_calibration(config),
+        rotate: get_rotate(config),
         size: size
     }
 
@@ -112,6 +114,13 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
       _ ->
         Logger.error("Invalid touch calibration in driver config")
         nil
+    end
+  end
+
+  defp get_rotate(config) do
+    case config[:rotate] do
+      rotate when rotate in [0, 1, 2, 3] -> rotate
+      _ -> 0
     end
   end
 
