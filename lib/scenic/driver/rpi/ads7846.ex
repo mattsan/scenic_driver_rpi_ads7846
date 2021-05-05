@@ -74,12 +74,9 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
     Logger.debug("input events: #{inspect(events, limit: :infinity)}")
 
     state =
-      Enum.reduce(events, state, fn event, st ->
-        st
-        |> Mouse.ev_abs(event)
-        |> Mouse.simulate_mouse(event)
-      end)
-      |> Mouse.send_mouse()
+      state
+      |> Mouse.simulate(events)
+      |> Mouse.send_event()
 
     {:noreply, state}
   end
