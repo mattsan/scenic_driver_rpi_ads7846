@@ -118,9 +118,9 @@ defmodule Scenic.Driver.Rpi.ADS7846.Mouse do
     transform(state, point)
   end
 
-  defp transform(%{rotate: 0, size: {width, height}}, {x, y}), do: {height - y, width - x}
-  defp transform(%{rotate: 1}, {x, y}), do: {x, y}
+  defp transform(%{rotate: 0, size: {width, height}}, {x, y}), do: {width - y, height - x}
+  defp transform(%{rotate: 1, size: {width, _}}, {x, y}), do: {width - x, y}
   defp transform(%{rotate: 2}, {x, y}), do: {y, x}
-  defp transform(%{rotate: 3, size: {width, height}}, {x, y}), do: {width - x, height - y}
+  defp transform(%{rotate: 3, size: {_, height}}, {x, y}), do: {x, height - y}
   defp transform(_, {x, y}), do: {x, y}
 end
