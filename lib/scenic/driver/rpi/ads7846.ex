@@ -4,6 +4,11 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
 
   require Logger
 
+  @type calibration :: {
+          {number(), number(), number()},
+          {number(), number(), number()}
+        }
+
   @init_retry_ms 400
   @device "ADS7846 Touchscreen"
   @initial_state %{
@@ -13,16 +18,15 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
     viewport: nil,
     slot: 0,
     touch: false,
-    fingers: %{},
     mouse_x: nil,
     mouse_y: nil,
     mouse_event: nil,
     config: nil,
     calibration: nil,
-    screen_size: nil
+    size: nil
   }
 
-  defguardp is_calibration(ax, bx, dx, ay, by, dy)
+  defguardp is_numbers(ax, bx, dx, ay, by, dy)
             when is_number(ax) and
                    is_number(bx) and
                    is_number(dx) and
@@ -31,28 +35,18 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
                    is_number(dy)
 
   @impl true
-  def init(viewport, {_, _} = screen_size, config) do
-    Process.send(self(), {:init_driver, @device}, [])
+  def init(viewport, {_, _} = size, config) do
+    init_driver(@device)
 
     state = %{
       @initial_state
       | viewport: viewport,
         config: config,
         calibration: get_calibration(config),
-        screen_size: screen_size
+        size: size
     }
 
     {:ok, state}
-  end
-
-  @impl true
-  def handle_call(_msg, _from, state) do
-    {:reply, :e_no_impl, state}
-  end
-
-  @impl true
-  def handle_cast(_msg, state) do
-    {:noreply, state}
   end
 
   @impl true
@@ -68,9 +62,9 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
         {:noreply, %{state | event_pid: pid, event_path: event}}
 
       nil ->
-        Logger.warn("Device not found: #{inspect(requested_device)}")
+        Logger.warning("Device not found: #{inspect(requested_device)}")
 
-        Process.send_after(self(), {:init_driver, requested_device}, @init_retry_ms)
+        init_driver_after(requested_device, @init_retry_ms)
 
         {:noreply, state}
     end
@@ -87,41 +81,45 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
       end)
       |> Mouse.send_mouse()
 
-    Logger.debug("mouse event: #{inspect(state, limit: :infinity)}")
-
     {:noreply, state}
   end
 
   def handle_info(msg, state) do
-    Logger.info("Unhandled info. msg: #{inspect(msg)}")
+    Logger.info("Unhandled message. msg: #{inspect(msg, limit: :infinity)}")
 
     {:noreply, state}
   end
 
-  @spec get_calibration(keyword()) ::
-          {{number(), number(), number()}, {number(), number(), number()}} | nil
+  defp init_driver(device) do
+    Process.send(self(), {:init_driver, device}, [])
+  end
+
+  defp init_driver_after(device, msec) do
+    Process.send_after(self(), {:init_driver, device}, msec)
+  end
+
+  @spec get_calibration(keyword()) :: calibration() | nil
   defp get_calibration(config) do
     case config[:calibration] do
-      {{ax, bx, dx}, {ay, by, dy}} = calibration when is_calibration(ax, bx, dx, ay, by, dy) ->
-        Logger.debug("calibration: #{ax}, #{bx}, #{dx}, #{ay}, #{by}, #{dy}")
+      {{ax, bx, dx}, {ay, by, dy}} = calibration when is_numbers(ax, bx, dx, ay, by, dy) ->
+        Logger.debug(
+          "calibration ax: #{ax}, bx: #{bx}, dx: #{dx}, ay: #{ay}, by: #{by}, dy: #{dy}"
+        )
+
         calibration
 
       nil ->
+        Logger.warning("Touch calibration is not defined in driver config")
         nil
 
       _ ->
         Logger.error("Invalid touch calibration in driver config")
-        Logger.error("Must be a tuple in the form of {{ax, bx, dx}, {ay, by, dy}}")
-        Logger.error("See documentation for details")
-
         nil
     end
   end
 
-  defp find_device(devices, target_device) do
+  defp find_device(devices, requested_device) do
     devices
-    |> Enum.find(fn {_event, %InputEvent.Info{name: name}} ->
-      name =~ target_device
-    end)
+    |> Enum.find(fn {_event, %InputEvent.Info{name: name}} -> name =~ requested_device end)
   end
 end
