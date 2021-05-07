@@ -1,13 +1,10 @@
 defmodule Scenic.Driver.Rpi.ADS7846 do
   use Scenic.ViewPort.Driver
-  alias Scenic.Driver.Rpi.ADS7846.Mouse
+
+  alias Scenic.Driver.Rpi.ADS7846.{Config, Event}
+  alias Scenic.ViewPort
 
   require Logger
-
-  @type calibration :: {
-          {number(), number(), number()},
-          {number(), number(), number()}
-        }
 
   @init_retry_ms 400
   @device "ADS7846 Touchscreen"
@@ -27,24 +24,16 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
     size: nil
   }
 
-  defguardp is_numbers(ax, bx, dx, ay, by, dy)
-            when is_number(ax) and
-                   is_number(bx) and
-                   is_number(dx) and
-                   is_number(ay) and
-                   is_number(by) and
-                   is_number(dy)
-
   @impl true
   def init(viewport, {_, _} = size, config) do
-    init_driver(@device)
+    Process.send(self(), {:init_driver, @device}, [])
 
     state = %{
       @initial_state
       | viewport: viewport,
         config: config,
-        calibration: get_calibration(config),
-        rotate: get_rotate(config),
+        calibration: Config.get_calibration(config),
+        rotate: Config.get_rotate(config),
         size: size
     }
 
@@ -52,24 +41,12 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
   end
 
   @impl true
+  def handle_info(_, _)
+
   def handle_info({:init_driver, requested_device}, state) do
-    InputEvent.enumerate()
-    |> find_device(requested_device)
-    |> case do
-      {event, %InputEvent.Info{}} ->
-        {:ok, pid} = InputEvent.start_link(event)
+    device_info = find_device(requested_device)
 
-        Logger.info("ADS7846 Driver initialized")
-
-        {:noreply, %{state | event_pid: pid, event_path: event}}
-
-      nil ->
-        Logger.warning("Device not found: #{inspect(requested_device)}")
-
-        init_driver_after(requested_device, @init_retry_ms)
-
-        {:noreply, state}
-    end
+    {:noreply, init_driver(state, device_info)}
   end
 
   def handle_info({:input_event, event_path, events}, %{event_path: event_path} = state) do
@@ -77,8 +54,8 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
 
     state =
       state
-      |> Mouse.simulate(events)
-      |> Mouse.send_event()
+      |> Event.simulate(events)
+      |> Event.send_event(&ViewPort.input(state.viewport, &1))
 
     {:noreply, state}
   end
@@ -89,43 +66,35 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
     {:noreply, state}
   end
 
-  defp init_driver(device) do
-    Process.send(self(), {:init_driver, device}, [])
-  end
+  defp find_device(requested_device) do
+    device_info =
+      InputEvent.enumerate()
+      |> Enum.find(fn {_, %InputEvent.Info{name: name}} ->
+        name =~ requested_device
+      end)
 
-  defp init_driver_after(device, msec) do
-    Process.send_after(self(), {:init_driver, device}, msec)
-  end
-
-  @spec get_calibration(keyword()) :: calibration() | nil
-  defp get_calibration(config) do
-    case config[:calibration] do
-      {{ax, bx, dx}, {ay, by, dy}} = calibration when is_numbers(ax, bx, dx, ay, by, dy) ->
-        Logger.debug(
-          "calibration ax: #{ax}, bx: #{bx}, dx: #{dx}, ay: #{ay}, by: #{by}, dy: #{dy}"
-        )
-
-        calibration
-
-      nil ->
-        Logger.warning("Touch calibration is not defined in driver config")
-        nil
+    case device_info do
+      {_event, %InputEvent.Info{}} ->
+        device_info
 
       _ ->
-        Logger.error("Invalid touch calibration in driver config")
-        nil
+        {:not_found, requested_device}
     end
   end
 
-  defp get_rotate(config) do
-    case config[:rotate] do
-      rotate when rotate in [0, 1, 2, 3] -> rotate
-      _ -> 0
-    end
+  defp init_driver(state, {event, %InputEvent.Info{}}) do
+    {:ok, pid} = InputEvent.start_link(event)
+
+    Logger.info("ADS7846 Driver initialized")
+
+    %{state | event_pid: pid, event_path: event}
   end
 
-  defp find_device(devices, requested_device) do
-    devices
-    |> Enum.find(fn {_event, %InputEvent.Info{name: name}} -> name =~ requested_device end)
+  defp init_driver(state, {:not_found, requested_device}) do
+    Logger.warning("#{requested_device} not found. Retry to find it.")
+
+    Process.send_after(self(), {:init_driver, requested_device}, @init_retry_ms)
+
+    state
   end
 end

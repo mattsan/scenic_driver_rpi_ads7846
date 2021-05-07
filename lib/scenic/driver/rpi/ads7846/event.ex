@@ -1,7 +1,5 @@
-defmodule Scenic.Driver.Rpi.ADS7846.Mouse do
+defmodule Scenic.Driver.Rpi.ADS7846.Event do
   @moduledoc false
-
-  alias Scenic.ViewPort
 
   require Logger
 
@@ -59,49 +57,49 @@ defmodule Scenic.Driver.Rpi.ADS7846.Mouse do
     end
   end
 
-  def send_event(state)
+  def send_event(state, f)
 
-  def send_event(%{viewport: viewport, mouse_x: x, mouse_y: y, mouse_event: :mouse_down} = state)
-      when is_point(x, y) do
+  def send_event(%{mouse_x: x, mouse_y: y, mouse_event: :mouse_down} = state, f)
+      when is_point(x, y) and is_function(f) do
     point = project_point(state, {x, y})
     input_event = {:cursor_button, {:left, :press, 0, point}}
 
     Logger.debug("input_event: #{inspect(input_event, limit: :infinity)}")
 
-    ViewPort.input(viewport, input_event)
+    f.(input_event)
 
     %{state | mouse_event: nil}
   end
 
-  def send_event(%{viewport: viewport, mouse_x: x, mouse_y: y, mouse_event: :mouse_up} = state)
-      when is_point(x, y) do
+  def send_event(%{mouse_x: x, mouse_y: y, mouse_event: :mouse_up} = state, f)
+      when is_point(x, y) and is_function(f) do
     point = project_point(state, {x, y})
     input_event = {:cursor_button, {:left, :release, 0, point}}
 
     Logger.debug("input_event: #{inspect(input_event, limit: :infinity)}")
 
-    ViewPort.input(viewport, input_event)
+    f.(input_event)
 
     %{state | mouse_x: nil, mouse_y: nil, mouse_event: nil}
   end
 
-  def send_event(%{viewport: viewport, mouse_x: x, mouse_y: y, mouse_event: :mouse_move} = state)
-      when is_point(x, y) do
+  def send_event(%{mouse_x: x, mouse_y: y, mouse_event: :mouse_move} = state, f)
+      when is_point(x, y) and is_function(f) do
     point = project_point(state, {x, y})
     input_event = {:cursor_pos, point}
 
     Logger.debug("input_event: #{inspect(input_event, limit: :infinity)}")
 
-    ViewPort.input(viewport, input_event)
+    f.(input_event)
 
     %{state | mouse_event: nil}
   end
 
-  def send_event(%{mouse_event: :mouse_up} = state) do
+  def send_event(%{mouse_event: :mouse_up} = state, f) when is_function(f) do
     %{state | mouse_x: nil, mouse_y: nil, mouse_event: nil}
   end
 
-  def send_event(state) do
+  def send_event(state, _f) do
     state
   end
 
