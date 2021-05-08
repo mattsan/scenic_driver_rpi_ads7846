@@ -65,7 +65,7 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
     {new_state, input_event} =
       state
       |> Mouse.simulate(events)
-      |> Mouse.update_event()
+      |> Mouse.get_input_event()
 
     if is_tuple(input_event) do
       Logger.debug("input_event: #{inspect(input_event, limit: :infinity)}")

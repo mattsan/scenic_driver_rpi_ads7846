@@ -1,8 +1,6 @@
 defmodule Scenic.Driver.Rpi.ADS7846.Mouse do
   @moduledoc false
 
-  require Logger
-
   def simulate(state, events) do
     Enum.reduce(events, state, fn
       {:ev_key, :btn_touch, 0}, %{touch: false} = state ->
@@ -34,44 +32,69 @@ defmodule Scenic.Driver.Rpi.ADS7846.Mouse do
     end)
   end
 
-  def update_event(state) do
+  def get_input_event(state) do
     case state do
-      %{mouse_event: :mouse_down, mouse_x: x, mouse_y: y} ->
-        point = project_point(state, {x, y})
-        input_event = {:cursor_button, {:left, :press, 0, point}}
-        {%{state | mouse_event: nil}, input_event}
+      %{mouse_event: :mouse_down} ->
+        {
+          %{state | mouse_event: nil},
+          {:cursor_button, {:left, :press, 0, get_screen_point(state)}}
+        }
 
-      %{mouse_event: :mouse_up, mouse_x: x, mouse_y: y} ->
-        point = project_point(state, {x, y})
-        input_event = {:cursor_button, {:left, :release, 0, point}}
-        {%{state | mouse_event: nil, mouse_x: nil, mouse_y: nil}, input_event}
+      %{mouse_event: :mouse_up} ->
+        {
+          %{state | mouse_event: nil, mouse_x: nil, mouse_y: nil},
+          {:cursor_button, {:left, :release, 0, get_screen_point(state)}}
+        }
 
-      %{mouse_event: :mouse_move, mouse_x: x, mouse_y: y} ->
-        point = project_point(state, {x, y})
-        input_event = {:cursor_pos, point}
-        {%{state | mouse_event: nil}, input_event}
+      %{mouse_event: :mouse_move} ->
+        {
+          %{state | mouse_event: nil},
+          {:cursor_pos, get_screen_point(state)}
+        }
 
       _ ->
-        {state, :no_input_event}
+        {
+          state,
+          :no_input_event
+        }
     end
   end
 
-  defp project_point(%{calibration: {{ax, bx, dx}, {ay, by, dy}}} = state, {x, y}) do
-    point = {
-      x * ax + y * bx + dx,
-      y * ay + x * by + dy
-    }
-
-    transform(state, point)
+  defp get_screen_point(%{mouse_x: x, mouse_y: y} = state) do
+    {x, y}
+    |> calibrate(state)
+    |> transform(state)
   end
 
-  defp project_point(state, {_, _} = point) do
-    transform(state, point)
+  defp calibrate({x, y}, state) do
+    case state do
+      %{calibration: {{ax, bx, dx}, {ay, by, dy}}} ->
+        {
+          x * ax + y * bx + dx,
+          y * ay + x * by + dy
+        }
+
+      _ ->
+        {x, y}
+    end
   end
 
-  defp transform(%{rotate: 0, size: {width, height}}, {x, y}), do: {width - y, height - x}
-  defp transform(%{rotate: 1, size: {width, _}}, {x, y}), do: {width - x, y}
-  defp transform(%{rotate: 2}, {x, y}), do: {y, x}
-  defp transform(%{rotate: 3, size: {_, height}}, {x, y}), do: {x, height - y}
-  defp transform(_, {x, y}), do: {x, y}
+  defp transform({x, y}, state) do
+    case state do
+      %{rotate: 0, size: {width, height}} ->
+        {width - y, height - x}
+
+      %{rotate: 1, size: {width, _}} ->
+        {width - x, y}
+
+      %{rotate: 2} ->
+        {y, x}
+
+      %{rotate: 3, size: {_, height}} ->
+        {x, height - y}
+
+      _ ->
+        {x, y}
+    end
+  end
 end
