@@ -1,12 +1,11 @@
 defmodule Scenic.Driver.Rpi.ADS7846 do
   use Scenic.ViewPort.Driver
 
-  alias Scenic.Driver.Rpi.ADS7846.{Config, Event}
+  alias Scenic.Driver.Rpi.ADS7846.{Config, Device, Mouse}
   alias Scenic.ViewPort
 
   require Logger
 
-  @init_retry_ms 400
   @device "ADS7846 Touchscreen"
   @initial_state %{
     device: @device,
@@ -44,9 +43,11 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
   def handle_info(_, _)
 
   def handle_info({:init_driver, requested_device}, state) do
-    device_info = find_device(requested_device)
+    state =
+      state
+      |> Device.initialize(requested_device)
 
-    {:noreply, init_driver(state, device_info)}
+    {:noreply, state}
   end
 
   def handle_info({:input_event, event_path, events}, %{event_path: event_path} = state) do
@@ -54,8 +55,8 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
 
     state =
       state
-      |> Event.simulate(events)
-      |> Event.send_event(&ViewPort.input(state.viewport, &1))
+      |> Mouse.simulate(events)
+      |> Mouse.send_event(&ViewPort.input(state.viewport, &1))
 
     {:noreply, state}
   end
@@ -64,37 +65,5 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
     Logger.info("Unhandled message. msg: #{inspect(msg, limit: :infinity)}")
 
     {:noreply, state}
-  end
-
-  defp find_device(requested_device) do
-    device_info =
-      InputEvent.enumerate()
-      |> Enum.find(fn {_, %InputEvent.Info{name: name}} ->
-        name =~ requested_device
-      end)
-
-    case device_info do
-      {_event, %InputEvent.Info{}} ->
-        device_info
-
-      _ ->
-        {:not_found, requested_device}
-    end
-  end
-
-  defp init_driver(state, {event, %InputEvent.Info{}}) do
-    {:ok, pid} = InputEvent.start_link(event)
-
-    Logger.info("ADS7846 Driver initialized")
-
-    %{state | event_pid: pid, event_path: event}
-  end
-
-  defp init_driver(state, {:not_found, requested_device}) do
-    Logger.warning("#{requested_device} not found. Retry to find it.")
-
-    Process.send_after(self(), {:init_driver, requested_device}, @init_retry_ms)
-
-    state
   end
 end

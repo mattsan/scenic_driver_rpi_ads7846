@@ -1,4 +1,4 @@
-defmodule Scenic.Driver.Rpi.ADS7846.Event do
+defmodule Scenic.Driver.Rpi.ADS7846.Mouse do
   @moduledoc false
 
   require Logger
