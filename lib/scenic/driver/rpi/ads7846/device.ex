@@ -1,7 +1,8 @@
 defmodule Scenic.Driver.Rpi.ADS7846.Device do
   @moduledoc false
 
-  require Logger
+  @spec initialize(String.t()) :: {:ok, {any(), any()}} | :not_found
+  def initialize(requested_device)
 
   case Mix.target() do
     target when target in [:rpi, :rpi0, :rpi2, :rpi3, :rpi3a, :rpi4] ->
@@ -23,8 +24,13 @@ defmodule Scenic.Driver.Rpi.ADS7846.Device do
       end
 
     _ ->
-      def initialize(_) do
-        {:ok, {:event_pid, :event_path}}
+      # Mock function for other targets.
+      def initialize(requested_device) do
+        if !is_nil(requested_device) do
+          {:ok, {:event_pid, :event_path}}
+        else
+          :not_found
+        end
       end
   end
 end

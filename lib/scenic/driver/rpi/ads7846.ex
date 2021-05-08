@@ -18,7 +18,6 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
     mouse_x: nil,
     mouse_y: nil,
     mouse_event: nil,
-    config: nil,
     calibration: nil,
     rotate: 0,
     size: nil
@@ -31,7 +30,6 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
     state = %{
       @initial_state
       | viewport: viewport,
-        config: config,
         calibration: Config.get_calibration(config),
         rotate: Config.get_rotate(config),
         size: size
@@ -41,12 +39,14 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
   end
 
   @impl true
-  def handle_info(_, _)
+  def handle_info(message, state)
 
   def handle_info({:init_driver, requested_device}, state) do
+    Logger.info("Initializing #{requested_device} Driver")
+
     case Device.initialize(requested_device) do
       {:ok, {event_pid, event_path}} ->
-        Logger.info("ADS7846 Driver initialized")
+        Logger.info("#{requested_device} Driver initialized")
 
         {:noreply, %{state | event_pid: event_pid, event_path: event_path}}
 
@@ -70,8 +70,8 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
     {:noreply, state}
   end
 
-  def handle_info(msg, state) do
-    Logger.info("Unhandled message. msg: #{inspect(msg, limit: :infinity)}")
+  def handle_info(message, state) do
+    Logger.info("Unhandled message: #{inspect(message, limit: :infinity)}")
 
     {:noreply, state}
   end
