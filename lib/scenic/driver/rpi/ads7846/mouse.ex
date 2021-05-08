@@ -3,104 +3,57 @@ defmodule Scenic.Driver.Rpi.ADS7846.Mouse do
 
   require Logger
 
-  defguardp is_point(x, y) when is_number(x) and is_number(y)
-
   def simulate(state, events) do
-    Enum.reduce(events, state, fn event, state ->
-      state
-      |> simulate_button(event)
-      |> simulate_movinig(event)
+    Enum.reduce(events, state, fn
+      {:ev_key, :btn_touch, 0}, %{touch: false} = state ->
+        %{state | mouse_event: nil}
+
+      {:ev_key, :btn_touch, 1}, %{touch: false} = state ->
+        %{state | touch: true, mouse_event: :mouse_down}
+
+      {:ev_key, :btn_touch, 0}, %{touch: true} = state ->
+        %{state | touch: false, mouse_event: :mouse_up}
+
+      {:ev_key, :btn_touch, 1}, %{touch: true} = state ->
+        %{state | mouse_event: nil}
+
+      {:ev_abs, :abs_x, x}, %{slot: 0, mouse_event: nil} = state ->
+        %{state | mouse_event: :mouse_move, mouse_x: x}
+
+      {:ev_abs, :abs_y, y}, %{slot: 0, mouse_event: nil} = state ->
+        %{state | mouse_event: :mouse_move, mouse_y: y}
+
+      {:ev_abs, :abs_x, x}, %{slot: 0} = state ->
+        %{state | mouse_x: x}
+
+      {:ev_abs, :abs_y, y}, %{slot: 0} = state ->
+        %{state | mouse_y: y}
+
+      _, state ->
+        state
     end)
   end
 
-  defp simulate_button(state, event) do
-    case {state, event} do
-      {%{touch: touch}, {:ev_key, :btn_touch, 1}} ->
-        mouse_event =
-          case touch do
-            true -> nil
-            false -> :mouse_down
-          end
+  def update_event(state) do
+    case state do
+      %{mouse_event: :mouse_down, mouse_x: x, mouse_y: y} ->
+        point = project_point(state, {x, y})
+        input_event = {:cursor_button, {:left, :press, 0, point}}
+        {%{state | mouse_event: nil}, input_event}
 
-        %{state | touch: true, mouse_event: mouse_event}
+      %{mouse_event: :mouse_up, mouse_x: x, mouse_y: y} ->
+        point = project_point(state, {x, y})
+        input_event = {:cursor_button, {:left, :release, 0, point}}
+        {%{state | mouse_event: nil, mouse_x: nil, mouse_y: nil}, input_event}
 
-      {%{touch: touch}, {:ev_key, :btn_touch, 0}} ->
-        mouse_event =
-          case touch do
-            true -> :mouse_up
-            false -> nil
-          end
+      %{mouse_event: :mouse_move, mouse_x: x, mouse_y: y} ->
+        point = project_point(state, {x, y})
+        input_event = {:cursor_pos, point}
+        {%{state | mouse_event: nil}, input_event}
 
-        %{state | touch: false, mouse_event: mouse_event}
-
-      {state, _event} ->
-        state
+      _ ->
+        {state, :no_input_event}
     end
-  end
-
-  defp simulate_movinig(state, event) do
-    case {state, event} do
-      {%{slot: 0, mouse_event: nil}, {:ev_abs, :abs_x, x}} ->
-        %{state | mouse_event: :mouse_move, mouse_x: x}
-
-      {%{slot: 0, mouse_event: nil} = state, {:ev_abs, :abs_y, y}} ->
-        %{state | mouse_event: :mouse_move, mouse_y: y}
-
-      {%{slot: 0} = state, {:ev_abs, :abs_x, x}} ->
-        %{state | mouse_x: x}
-
-      {%{slot: 0} = state, {:ev_abs, :abs_y, y}} ->
-        %{state | mouse_y: y}
-
-      {state, _} ->
-        state
-    end
-  end
-
-  def send_event(state, f)
-
-  def send_event(%{mouse_x: x, mouse_y: y, mouse_event: :mouse_down} = state, f)
-      when is_point(x, y) and is_function(f) do
-    point = project_point(state, {x, y})
-    input_event = {:cursor_button, {:left, :press, 0, point}}
-
-    Logger.debug("input_event: #{inspect(input_event, limit: :infinity)}")
-
-    f.(input_event)
-
-    %{state | mouse_event: nil}
-  end
-
-  def send_event(%{mouse_x: x, mouse_y: y, mouse_event: :mouse_up} = state, f)
-      when is_point(x, y) and is_function(f) do
-    point = project_point(state, {x, y})
-    input_event = {:cursor_button, {:left, :release, 0, point}}
-
-    Logger.debug("input_event: #{inspect(input_event, limit: :infinity)}")
-
-    f.(input_event)
-
-    %{state | mouse_x: nil, mouse_y: nil, mouse_event: nil}
-  end
-
-  def send_event(%{mouse_x: x, mouse_y: y, mouse_event: :mouse_move} = state, f)
-      when is_point(x, y) and is_function(f) do
-    point = project_point(state, {x, y})
-    input_event = {:cursor_pos, point}
-
-    Logger.debug("input_event: #{inspect(input_event, limit: :infinity)}")
-
-    f.(input_event)
-
-    %{state | mouse_event: nil}
-  end
-
-  def send_event(%{mouse_event: :mouse_up} = state, f) when is_function(f) do
-    %{state | mouse_x: nil, mouse_y: nil, mouse_event: nil}
-  end
-
-  def send_event(state, _f) do
-    state
   end
 
   defp project_point(%{calibration: {{ax, bx, dx}, {ay, by, dy}}} = state, {x, y}) do

@@ -62,12 +62,17 @@ defmodule Scenic.Driver.Rpi.ADS7846 do
   def handle_info({:input_event, event_path, events}, %{event_path: event_path} = state) do
     Logger.debug("input events: #{inspect(events, limit: :infinity)}")
 
-    state =
+    {new_state, input_event} =
       state
       |> Mouse.simulate(events)
-      |> Mouse.send_event(&ViewPort.input(state.viewport, &1))
+      |> Mouse.update_event()
 
-    {:noreply, state}
+    if is_tuple(input_event) do
+      Logger.debug("input_event: #{inspect(input_event, limit: :infinity)}")
+      ViewPort.input(state.viewport, input_event)
+    end
+
+    {:noreply, new_state}
   end
 
   def handle_info(message, state) do
