@@ -1,78 +1,84 @@
 defmodule Scenic.Driver.Rpi.ADS7846.Mouse do
   @moduledoc false
 
-  def simulate(state, events) do
-    Enum.reduce(events, state, fn
-      {:ev_key, :btn_touch, 0}, %{touch: false} = state ->
-        %{state | mouse_event: nil}
+  defstruct [:state, :touch, :x, :y, :calibration, :rotate]
 
-      {:ev_key, :btn_touch, 1}, %{touch: false} = state ->
-        %{state | touch: true, mouse_event: :mouse_down}
-
-      {:ev_key, :btn_touch, 0}, %{touch: true} = state ->
-        %{state | touch: false, mouse_event: :mouse_up}
-
-      {:ev_key, :btn_touch, 1}, %{touch: true} = state ->
-        %{state | mouse_event: nil}
-
-      {:ev_abs, :abs_x, x}, %{mouse_event: nil} = state ->
-        %{state | mouse_event: :mouse_move, mouse_x: x}
-
-      {:ev_abs, :abs_y, y}, %{mouse_event: nil} = state ->
-        %{state | mouse_event: :mouse_move, mouse_y: y}
-
-      {:ev_abs, :abs_x, x}, state ->
-        %{state | mouse_x: x}
-
-      {:ev_abs, :abs_y, y}, state ->
-        %{state | mouse_y: y}
-
-      _, state ->
-        state
-    end)
-    |> get_input_event()
+  def new(%{touch: touch, mouse_x: x, mouse_y: y, calibration: calibration, rotate: rotate}) do
+    %__MODULE__{touch: touch, x: x, y: y, calibration: calibration, rotate: rotate}
   end
 
-  defp get_input_event(state) do
-    case state do
-      %{mouse_event: :mouse_down} ->
-        {
-          %{state | mouse_event: nil},
-          {:cursor_button, {:left, :press, 0, get_screen_point(state)}}
-        }
+  def simulate(%__MODULE__{} = mouse_event, events) do
+    fold_events(events, mouse_event)
+  end
 
-      %{mouse_event: :mouse_up} ->
-        {
-          %{state | mouse_event: nil, mouse_x: nil, mouse_y: nil},
-          {:cursor_button, {:left, :release, 0, get_screen_point(state)}}
-        }
+  def get_input_event(%__MODULE__{} = mouse_event) do
+    case mouse_event.state do
+      :down ->
+        {:cursor_button, {:left, :press, 0, get_screen_point(mouse_event)}}
 
-      %{mouse_event: :mouse_move} ->
-        {
-          %{state | mouse_event: nil},
-          {:cursor_pos, get_screen_point(state)}
-        }
+      :up ->
+        {:cursor_button, {:left, :release, 0, get_screen_point(mouse_event)}}
 
-      state ->
-        {
-          state,
-          :no_input_event
-        }
+      :move ->
+        {:cursor_pos, get_screen_point(mouse_event)}
+
+      _ ->
+        :no_input_event
     end
   end
 
-  defp get_screen_point(%{mouse_x: x, mouse_y: y} = state) do
-    {x, y}
-    |> calibrate(state)
-    |> transform(state)
+  def update_state(%__MODULE__{} = mouse_event, state) when is_map(state) do
+    case mouse_event.state do
+      :up ->
+        %{state | touch: mouse_event.touch, mouse_x: nil, mouse_y: nil}
+
+      _ ->
+        %{state | touch: mouse_event.touch, mouse_x: mouse_event.x, mouse_y: mouse_event.y}
+    end
   end
 
-  defp calibrate({x, y}, state) do
-    case state do
+  defp fold_events(events, mouse_event) do
+    Enum.reduce(events, mouse_event, fn
+      {:ev_key, :btn_touch, 1}, %{touch: false} = mouse_event ->
+        %{mouse_event | state: :down, touch: true}
+
+      {:ev_key, :btn_touch, 0}, %{touch: true} = mouse_event ->
+        %{mouse_event | state: :up, touch: false}
+
+      {:ev_key, :btn_touch, 1}, %{touch: true} = mouse_event ->
+        %{mouse_event | state: nil}
+
+      {:ev_abs, :abs_x, x}, %{state: nil} = mouse_event ->
+        %{mouse_event | state: :move, x: x}
+
+      {:ev_abs, :abs_y, y}, %{state: nil} = mouse_event ->
+        %{mouse_event | state: :move, y: y}
+
+      {:ev_abs, :abs_x, x}, mouse_event ->
+        %{mouse_event | x: x}
+
+      {:ev_abs, :abs_y, y}, mouse_event ->
+        %{mouse_event | y: y}
+
+      _, mouse_event ->
+        mouse_event
+    end)
+  end
+
+  defp get_screen_point(mouse_event) do
+    {mouse_event.x, mouse_event.y}
+    |> calibrate(mouse_event)
+    |> transform(mouse_event)
+  end
+
+  defp calibrate({x, y}, mouse_event) do
+    precision = 3
+
+    case mouse_event do
       %{calibration: {{ax, bx, dx}, {ay, by, dy}}} ->
         {
-          x * ax + y * bx + dx,
-          y * ay + x * by + dy
+          Float.round(x * ax + y * bx + dx, precision),
+          Float.round(y * ay + x * by + dy, precision)
         }
 
       _ ->
@@ -80,8 +86,8 @@ defmodule Scenic.Driver.Rpi.ADS7846.Mouse do
     end
   end
 
-  defp transform({x, y}, state) do
-    case state do
+  defp transform({x, y}, mouse_event) do
+    case mouse_event do
       %{rotate: 0, size: {width, height}} ->
         {width - y, height - x}
 
