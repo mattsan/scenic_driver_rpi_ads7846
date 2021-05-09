@@ -15,24 +15,25 @@ defmodule Scenic.Driver.Rpi.ADS7846.Mouse do
       {:ev_key, :btn_touch, 1}, %{touch: true} = state ->
         %{state | mouse_event: nil}
 
-      {:ev_abs, :abs_x, x}, %{slot: 0, mouse_event: nil} = state ->
+      {:ev_abs, :abs_x, x}, %{mouse_event: nil} = state ->
         %{state | mouse_event: :mouse_move, mouse_x: x}
 
-      {:ev_abs, :abs_y, y}, %{slot: 0, mouse_event: nil} = state ->
+      {:ev_abs, :abs_y, y}, %{mouse_event: nil} = state ->
         %{state | mouse_event: :mouse_move, mouse_y: y}
 
-      {:ev_abs, :abs_x, x}, %{slot: 0} = state ->
+      {:ev_abs, :abs_x, x}, state ->
         %{state | mouse_x: x}
 
-      {:ev_abs, :abs_y, y}, %{slot: 0} = state ->
+      {:ev_abs, :abs_y, y}, state ->
         %{state | mouse_y: y}
 
       _, state ->
         state
     end)
+    |> get_input_event()
   end
 
-  def get_input_event(state) do
+  defp get_input_event(state) do
     case state do
       %{mouse_event: :mouse_down} ->
         {
@@ -52,7 +53,7 @@ defmodule Scenic.Driver.Rpi.ADS7846.Mouse do
           {:cursor_pos, get_screen_point(state)}
         }
 
-      _ ->
+      state ->
         {
           state,
           :no_input_event
