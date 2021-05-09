@@ -1,14 +1,45 @@
 defmodule Scenic.Driver.Rpi.ADS7846.Mouse do
   @moduledoc false
 
-  defstruct [:state, :touch, :x, :y, :calibration, :rotate]
+  defstruct [:state, :touch, :x, :y, :size, :calibration, :rotate]
 
-  def new(%{touch: touch, mouse_x: x, mouse_y: y, calibration: calibration, rotate: rotate}) do
-    %__MODULE__{touch: touch, x: x, y: y, calibration: calibration, rotate: rotate}
+  def new(%{
+        touch: touch,
+        mouse_x: x,
+        mouse_y: y,
+        size: size,
+        calibration: calibration,
+        rotate: rotate
+      }) do
+    %__MODULE__{touch: touch, x: x, y: y, size: size, calibration: calibration, rotate: rotate}
   end
 
   def simulate(%__MODULE__{} = mouse_event, events) do
-    fold_events(events, mouse_event)
+    Enum.reduce(events, mouse_event, fn
+      {:ev_key, :btn_touch, 1}, %{touch: false} = mouse_event ->
+        %{mouse_event | state: :down, touch: true}
+
+      {:ev_key, :btn_touch, 0}, %{touch: true} = mouse_event ->
+        %{mouse_event | state: :up, touch: false}
+
+      {:ev_key, :btn_touch, 1}, %{touch: true} = mouse_event ->
+        %{mouse_event | state: nil}
+
+      {:ev_abs, :abs_x, x}, %{state: nil} = mouse_event ->
+        %{mouse_event | state: :move, x: x}
+
+      {:ev_abs, :abs_y, y}, %{state: nil} = mouse_event ->
+        %{mouse_event | state: :move, y: y}
+
+      {:ev_abs, :abs_x, x}, mouse_event ->
+        %{mouse_event | x: x}
+
+      {:ev_abs, :abs_y, y}, mouse_event ->
+        %{mouse_event | y: y}
+
+      _, mouse_event ->
+        mouse_event
+    end)
   end
 
   def get_input_event(%__MODULE__{} = mouse_event) do
@@ -35,34 +66,6 @@ defmodule Scenic.Driver.Rpi.ADS7846.Mouse do
       _ ->
         %{state | touch: mouse_event.touch, mouse_x: mouse_event.x, mouse_y: mouse_event.y}
     end
-  end
-
-  defp fold_events(events, mouse_event) do
-    Enum.reduce(events, mouse_event, fn
-      {:ev_key, :btn_touch, 1}, %{touch: false} = mouse_event ->
-        %{mouse_event | state: :down, touch: true}
-
-      {:ev_key, :btn_touch, 0}, %{touch: true} = mouse_event ->
-        %{mouse_event | state: :up, touch: false}
-
-      {:ev_key, :btn_touch, 1}, %{touch: true} = mouse_event ->
-        %{mouse_event | state: nil}
-
-      {:ev_abs, :abs_x, x}, %{state: nil} = mouse_event ->
-        %{mouse_event | state: :move, x: x}
-
-      {:ev_abs, :abs_y, y}, %{state: nil} = mouse_event ->
-        %{mouse_event | state: :move, y: y}
-
-      {:ev_abs, :abs_x, x}, mouse_event ->
-        %{mouse_event | x: x}
-
-      {:ev_abs, :abs_y, y}, mouse_event ->
-        %{mouse_event | y: y}
-
-      _, mouse_event ->
-        mouse_event
-    end)
   end
 
   defp get_screen_point(mouse_event) do
